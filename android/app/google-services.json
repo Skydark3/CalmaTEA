@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "793838978316",
+    "project_id": "calmatea-4c781",
+    "storage_bucket": "calmatea-4c781.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:793838978316:android:83079d0cf28e13dafb3529",
+        "android_client_info": {
+          "package_name": "com.calmatea.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHBTFN94apC1MK4-tDTuURNaKDr_joSxo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
