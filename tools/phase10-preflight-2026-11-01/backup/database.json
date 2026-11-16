@@ -1,0 +1,18 @@
+{
+  "name": "projects/calmatea-4c781/databases/(default)",
+  "uid": "4f97857b-d598-4a09-beb6-2dd7dfe54e6d",
+  "createTime": "2026-10-02T05:47:30.215227Z",
+  "updateTime": "2026-10-02T05:47:30.215227Z",
+  "locationId": "southamerica-west1",
+  "type": "FIRESTORE_NATIVE",
+  "concurrencyMode": "PESSIMISTIC",
+  "versionRetentionPeriod": "3600s",
+  "earliestVersionTime": "2026-10-31T16:25:26.134027Z",
+  "appEngineIntegrationMode": "DISABLED",
+  "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_DISABLED",
+  "deleteProtectionState": "DELETE_PROTECTION_DISABLED",
+  "databaseEdition": "STANDARD",
+  "freeTier": true,
+  "realtimeUpdatesMode": "REALTIME_UPDATES_MODE_ENABLED",
+  "etag": "IIDqvpbj5JcDMMCV4LDI0pcD"
+}

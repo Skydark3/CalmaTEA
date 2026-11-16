@@ -1,0 +1,21 @@
+{
+  "projectId": "calmatea-4c781",
+  "capturedAtUtc": "2026-10-31T17:25:31.182Z",
+  "releaseName": "projects/calmatea-4c781/releases/cloud.firestore",
+  "rulesetName": "projects/calmatea-4c781/rulesets/e906613f-fbdc-43c0-abbc-d548cfeeac45",
+  "releaseUpdateTime": "2026-10-08T18:50:32.162159Z",
+  "remoteMethods": [
+    "GET"
+  ],
+  "applicationDocumentsRead": 0,
+  "files": {
+    "project.json": "b1fe31cf4d9526e758b4b5e1206e88d5a77d547828f5769be1c949e33b01153d",
+    "database.json": "ce867495078dd56f9c9a9d4773ff4f80496e698bdd6a33a1b04a15aed48a70e1",
+    "release.json": "e345c4960ae7f7963c8477581bf285afae71f9e08c68fa17aa5725e1f37c0e8a",
+    "ruleset.json": "9037ba45c42eec300e65b5ae5e025223e04004dff06886f041546184a0939d37",
+    "firestore.rules": "d3d6661464da65f0101bbc1304e1c452527f57d59216be8ec4e52d8cfe77029e",
+    "indexes.published.json": "bbc378b986a923bd1d6c4ea46abb55ee63ab0fb09044c8e97e06d529e107d7c2",
+    "fields.published.json": "c587b9aeb4ae063dbf8087942bff27d5355da044b05e8c1e89c14488e6f2adc3",
+    "firestore.indexes.json": "6742255415c36daf631b52f233039190af819205cc41fa58d07dd7d9e180c2b9"
+  }
+}

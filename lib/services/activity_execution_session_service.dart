@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../features/activities/config/activity_configuration_factory.dart';
 import '../models/activity_execution_result_model.dart';
 import '../models/activity_execution_session_model.dart';
 import '../models/activity_model.dart';
@@ -70,75 +71,70 @@ class ActivityExecutionSessionService
 
     for (var attempt = 0; attempt < 2; attempt++) {
       final newSessionReference = _sessions.doc();
-      final decision = await _firestoreService.instance.runTransaction(
-        (transaction) async {
-          final profile = await transaction.get(_users.doc(uid));
-          final activity = await transaction.get(_activities.doc(activityId));
-          final identity = _childIdentityFromProfile(profile, uid);
-          final activityData = _authorizedActivityData(
-            activity,
-            identity.childId,
-            requireAvailableStatus: true,
+      final decision = await _firestoreService.instance.runTransaction((
+        transaction,
+      ) async {
+        final profile = await transaction.get(_users.doc(uid));
+        final identity = _childIdentityFromProfile(profile, uid);
+        final activeReference = _activeSessions.doc(identity.childId);
+        final activeDocument = await transaction.get(activeReference);
+
+        if (activeDocument.exists) {
+          final active = _activeSessionFromDocument(activeDocument);
+          _ensureActiveSessionBelongsToChild(active, childId: identity.childId);
+          final activeSessionDocument = await transaction.get(
+            _sessions.doc(active.sessionId),
           );
-          final activeReference = _activeSessions.doc(identity.childId);
-          final activeDocument = await transaction.get(activeReference);
-
-          if (activeDocument.exists) {
-            final active = _activeSessionFromDocument(activeDocument);
-            _ensureActiveSessionBelongsToChild(
-              active,
-              childId: identity.childId,
+          if (!activeSessionDocument.exists) {
+            throw const ActiveExecutionSessionDataException(
+              'El bloqueo activo no tiene una sesión vinculada.',
             );
-            final activeSessionDocument = await transaction.get(
-              _sessions.doc(active.sessionId),
+          }
+          final activeSession = _sessionFromDocument(activeSessionDocument);
+          _ensureLockMatchesSession(active, activeSession);
+
+          if (activeSession.status ==
+              ActivityExecutionSessionStatus.inProgress) {
+            if (active.activityId == activityId && active.childUserId == uid) {
+              return _SessionStartDecision.recovered(active.sessionId);
+            }
+            throw ActiveExecutionSessionConflict(
+              sessionId: active.sessionId,
+              activityId: active.activityId,
+              canInterrupt: active.childUserId == uid,
             );
-            if (!activeSessionDocument.exists) {
-              throw const ActiveExecutionSessionDataException(
-                'El bloqueo activo no tiene una sesión vinculada.',
-              );
-            }
-            final activeSession = _sessionFromDocument(activeSessionDocument);
-            _ensureLockMatchesSession(active, activeSession);
-
-            if (activeSession.status ==
-                ActivityExecutionSessionStatus.inProgress) {
-              if (active.activityId == activityId &&
-                  active.childUserId == uid) {
-                return _SessionStartDecision.recovered(active.sessionId);
-              }
-              throw ActiveExecutionSessionConflict(
-                sessionId: active.sessionId,
-                activityId: active.activityId,
-                canInterrupt: active.childUserId == uid,
-              );
-            }
-
-            transaction.delete(activeReference);
-            return const _SessionStartDecision.retry();
           }
 
-          final timestamp = FieldValue.serverTimestamp();
-          transaction.set(newSessionReference, {
-            'id': newSessionReference.id,
-            'activityId': activity.id,
-            'therapyId': activityData.therapyId,
-            'childId': identity.childId,
-            'psychologistId': activityData.psychologistId,
-            'childUserId': uid,
-            'status': ActivityExecutionSessionStatus.inProgress.name,
-            'startedAt': timestamp,
-          });
-          transaction.set(activeReference, {
-            'sessionId': newSessionReference.id,
-            'activityId': activity.id,
-            'childId': identity.childId,
-            'psychologistId': activityData.psychologistId,
-            'childUserId': uid,
-            'startedAt': timestamp,
-          });
-          return _SessionStartDecision.created(newSessionReference.id);
-        },
-      );
+          transaction.delete(activeReference);
+          return const _SessionStartDecision.retry();
+        }
+
+        final activity = await transaction.get(_activities.doc(activityId));
+        final activityData = _authorizedActivityData(
+          activity,
+          identity.childId,
+        );
+        final timestamp = FieldValue.serverTimestamp();
+        transaction.set(newSessionReference, {
+          'id': newSessionReference.id,
+          'activityId': activity.id,
+          'therapyId': activityData.therapyId,
+          'childId': identity.childId,
+          'psychologistId': activityData.psychologistId,
+          'childUserId': uid,
+          'status': ActivityExecutionSessionStatus.inProgress.name,
+          'startedAt': timestamp,
+        });
+        transaction.set(activeReference, {
+          'sessionId': newSessionReference.id,
+          'activityId': activity.id,
+          'childId': identity.childId,
+          'psychologistId': activityData.psychologistId,
+          'childUserId': uid,
+          'startedAt': timestamp,
+        });
+        return _SessionStartDecision.created(newSessionReference.id);
+      });
 
       if (!decision.shouldRetry) return decision.sessionId!;
     }
@@ -179,7 +175,7 @@ class ActivityExecutionSessionService
     final sessionReference = _sessions.doc(sessionId);
     final resultReference = _results.doc(sessionId);
 
-    await _firestoreService.instance.runTransaction((transaction) async {
+    await _runCompletionTransaction((transaction) async {
       final sessionDocument = await transaction.get(sessionReference);
       if (!sessionDocument.exists) {
         throw StateError('La sesión no existe.');
@@ -209,21 +205,10 @@ class ActivityExecutionSessionService
       _ensureOwnInProgressSession(session, uid);
       _requireMatchingActiveSession(activeDocument, session, uid);
 
-      final activityDocument = await transaction.get(
-        _activities.doc(session.activityId),
-      );
-      final activityData = _authorizedActivityData(
-        activityDocument,
-        session.childId,
-        requireAvailableStatus: false,
-      );
-      _ensureSessionMatchesActivity(session, activityData);
-      if (metrics.activityType != activityData.type) {
-        throw ArgumentError(
-          'Las métricas no corresponden al tipo de la actividad.',
-        );
-      }
-
+      // La sesión y su bloqueo ya acreditan la identidad autorizada al inicio.
+      // No leer activities desde el cliente: su estado puede haber cambiado y
+      // las reglas ocultan completed/cancelled al niño. Las reglas del resultado
+      // comprueban internamente tipo y vínculos sin otorgar acceso al documento.
       transaction.update(sessionReference, {
         'status': ActivityExecutionSessionStatus.completed.name,
         'endedAt': FieldValue.serverTimestamp(),
@@ -235,7 +220,7 @@ class ActivityExecutionSessionService
         'childId': session.childId,
         'psychologistId': session.psychologistId,
         'childUserId': uid,
-        'activityType': activityData.type.name,
+        'activityType': metrics.activityType.name,
         'completedAt': FieldValue.serverTimestamp(),
         if (durationSeconds != null) 'durationSeconds': durationSeconds,
         'metrics': metrics.toMap(),
@@ -279,6 +264,36 @@ class ActivityExecutionSessionService
       });
       transaction.delete(activeReference);
     });
+  }
+
+  Future<void> _runCompletionTransaction(
+    Future<void> Function(Transaction) action,
+  ) async {
+    Object? callbackError;
+    StackTrace? callbackStack;
+    try {
+      await _firestoreService.instance.runTransaction<void>((
+        transaction,
+      ) async {
+        callbackError = null;
+        callbackStack = null;
+        try {
+          await action(transaction);
+        } catch (error, stack) {
+          callbackError = error;
+          callbackStack = stack;
+          rethrow;
+        }
+      });
+    } on FirebaseException catch (error) {
+      // Android may replace a failed Dart transaction callback with an opaque
+      // native `unknown` error. Preserve the actual cause, not a success or an
+      // unconditional retry; the caller still retries the same session safely.
+      if (error.code == 'unknown' && callbackError != null) {
+        Error.throwWithStackTrace(callbackError!, callbackStack!);
+      }
+      rethrow;
+    }
   }
 
   Stream<List<ActivityExecutionSessionModel>> watchPsychologistSessions({
@@ -343,9 +358,8 @@ class ActivityExecutionSessionService
 
   _AuthorizedActivityData _authorizedActivityData(
     DocumentSnapshot<Map<String, dynamic>> document,
-    String childId, {
-    required bool requireAvailableStatus,
-  }) {
+    String childId,
+  ) {
     final data = document.data();
     if (!document.exists || data == null || data['childId'] != childId) {
       throw StateError('La actividad no pertenece al paciente autenticado.');
@@ -355,16 +369,23 @@ class ActivityExecutionSessionService
     final psychologistId = _requiredString(data, 'psychologistId');
     final type = _activityTypeFromValue(data['type']);
     final status = _activityStatusFromValue(data['status']);
-    if (requireAvailableStatus &&
-        status != ActivityStatus.assigned &&
+    if (status != ActivityStatus.assigned &&
         status != ActivityStatus.inProgress) {
       throw StateError('La actividad no está disponible para ejecución.');
+    }
+    final rawConfiguration = data['configuration'];
+    if (rawConfiguration is! Map ||
+        ActivityConfigurationFactory.fromMap(
+              type,
+              Map<String, dynamic>.from(rawConfiguration),
+            )?.isValid !=
+            true) {
+      throw StateError('La actividad no tiene una configuración válida.');
     }
 
     return _AuthorizedActivityData(
       therapyId: therapyId,
       psychologistId: psychologistId,
-      type: type,
     );
   }
 
@@ -498,16 +519,6 @@ class ActivityExecutionSessionService
     }
   }
 
-  void _ensureSessionMatchesActivity(
-    ActivityExecutionSessionModel session,
-    _AuthorizedActivityData activity,
-  ) {
-    if (session.therapyId != activity.therapyId ||
-        session.psychologistId != activity.psychologistId) {
-      throw StateError('La sesión no coincide con la actividad vinculada.');
-    }
-  }
-
   static void _requireIdentifier(String value, String field) {
     if (value.trim().isEmpty || value.contains('/')) {
       throw ArgumentError.value(value, field, 'Identificador inválido.');
@@ -550,12 +561,10 @@ class _ChildIdentity {
 class _AuthorizedActivityData {
   final String therapyId;
   final String psychologistId;
-  final ActivityType type;
 
   const _AuthorizedActivityData({
     required this.therapyId,
     required this.psychologistId,
-    required this.type,
   });
 }
 
@@ -589,7 +598,5 @@ class _SessionStartDecision {
     : sessionId = value,
       shouldRetry = false;
 
-  const _SessionStartDecision.retry()
-    : sessionId = null,
-      shouldRetry = true;
+  const _SessionStartDecision.retry() : sessionId = null, shouldRetry = true;
 }

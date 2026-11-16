@@ -14,7 +14,9 @@
     "test:professional-history-e2e": "mocha --timeout 30000 professional-history.e2e.test.js",
     "test:execution-metrics-e2e": "mocha --timeout 30000 execution-metrics.e2e.test.js",
     "test:phase10-integral-e2e": "mocha --timeout 30000 phase-10-integral.e2e.test.js",
+    "test:active-session-e2e": "mocha --timeout 30000 active-execution-session.e2e.test.js",
     "test:phase10-e2e": "node run-phase10-e2e.js",
+    "test:android": "node run-android-status-validation.cjs",
     "seed": "node seed-emulator.js"
   },
   "devDependencies": {

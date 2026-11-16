@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "frozenAtUtc": "2026-11-01T21:36:48.329Z",
+  "reviewDateAmericaBogota": "2026-11-01",
+  "projectId": "calmatea-4c781",
+  "databaseId": "(default)",
+  "expectedSha256": {
+    "backup": "d3d6661464da65f0101bbc1304e1c452527f57d59216be8ec4e52d8cfe77029e",
+    "rules": "5eb5bc27e86afb3d5509bd6d5ace1beacb1de0f8bf4106c3b558434a0afb089f",
+    "indexes": "0851e25b02ee6d4084a3f0b2836e298bb96b3d3cd0ac8a877ab135b2a02480d7"
+  },
+  "verifiedBackupFiles": 8,
+  "unchangedLegacyCollections": [
+    "users/{uid}",
+    "psychologists/{uid}",
+    "children/{childId}",
+    "therapies/{therapyId}"
+  ],
+  "activityChanges": [
+    "type immutable",
+    "physical delete denied; cancelled retained"
+  ],
+  "otherPermissionChanges": [
+    "sessions",
+    "activityResults",
+    "activeExecutionSessions"
+  ],
+  "unexpectedPermissionChanges": false,
+  "configs": {
+    "firebase.rules.json": {
+      "database": "(default)",
+      "only": "firestore:rules",
+      "absoluteFile": "C:\\TEA\\tools\\phase10-preflight-2026-11-01\\candidate\\firestore.rules",
+      "hooks": []
+    },
+    "firebase.indexes.json": {
+      "database": "(default)",
+      "only": "firestore:indexes",
+      "absoluteFile": "C:\\TEA\\tools\\phase10-preflight-2026-11-01\\candidate\\firestore.indexes.json",
+      "hooks": []
+    },
+    "firebase.rollback.json": {
+      "database": "(default)",
+      "only": "firestore:rules",
+      "absoluteFile": "C:\\TEA\\tools\\phase10-preflight-2026-11-01\\backup\\firestore.rules",
+      "hooks": []
+    }
+  },
+  "indexes": {
+    "indexes": [
+      {
+        "collectionGroup": "sessions",
+        "queryScope": "COLLECTION",
+        "fields": [
+          {
+            "fieldPath": "psychologistId",
+            "order": "ASCENDING"
+          },
+          {
+            "fieldPath": "childId",
+            "order": "ASCENDING"
+          },
+          {
+            "fieldPath": "startedAt",
+            "order": "DESCENDING"
+          }
+        ]
+      }
+    ],
+    "fieldOverrides": []
+  },
+  "featureDefaults": {
+    "ENABLE_ACTIVITY_EXECUTION": false,
+    "ENABLE_ACTIVITY_PREVIEW": false,
+    "ENABLE_EXECUTION_HISTORY": false,
+    "ENABLE_EXECUTION_METRICS": false
+  },
+  "evidence": {
+    "flutter-analyze.log": {
+      "sha256": "4a03154cc9f2b8e64433e360558997f285b37ccc90af3b40d9da6b7f0c1dcb46",
+      "lastModifiedUtc": "2026-10-31T21:01:58.609Z",
+      "reviewedNotRerun": true
+    },
+    "flutter-test-final.log": {
+      "sha256": "54c47cd753ff56de0f9806b39f30649d9913bdced261b4e46f4245c74cf32014",
+      "lastModifiedUtc": "2026-10-31T21:03:17.766Z",
+      "reviewedNotRerun": true
+    },
+    "rules-test.log": {
+      "sha256": "b86bb3e642c98db067a2bb7a09d4eef6b751645667d3b274f0864de862775fa3",
+      "lastModifiedUtc": "2026-10-31T20:44:42.696Z",
+      "reviewedNotRerun": true
+    },
+    "phase10-e2e-final.log": {
+      "sha256": "6f5341900d784a28604f56d28f0b8c7219cf13751f6b11ef1d38c7a6776a5d88",
+      "lastModifiedUtc": "2026-10-31T21:03:52.240Z",
+      "reviewedNotRerun": true
+    },
+    "android-integral-transaction-fix.log": {
+      "sha256": "1310f0c877c2c76a14efd5fd10e13b4d2703788a91c33471f3ba4c6423fcc517",
+      "lastModifiedUtc": "2026-10-31T21:03:08.288Z",
+      "reviewedNotRerun": true
+    },
+    "android-integral-confirmation.log": {
+      "sha256": "4c01455d06fc1c062e8622cf140225c32c255496cde48807d1999820ab06353e",
+      "lastModifiedUtc": "2026-10-31T21:10:04.738Z",
+      "reviewedNotRerun": true
+    }
+  },
+  "cli": {
+    "version": "15.32.1",
+    "nodeVersion": "v22.19.0",
+    "shim": "C:\\Users\\ALEJANDRO\\AppData\\Roaming\\npm\\firebase.cmd",
+    "entrypoint": "C:\\Users\\ALEJANDRO\\AppData\\Roaming\\npm\\node_modules\\firebase-tools\\lib\\bin\\firebase.js",
+    "nodeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+    "libAndPackageTree": {
+      "fileCount": 885,
+      "algorithm": "sha256(sorted(relativePath + NUL + fileSha256 + LF))",
+      "sha256": "0b9b7aa642661ceaeae23550a21cf22bed5f510a91534072f7e2eccced4d50dc"
+    },
+    "shimSha256": "31747b4cbfe19fd8e36bb630841942ae1777dd95adc6362151d178c7470e322e",
+    "entrypointSha256": "1e05ff8373e5a5c7222475a0d90d4db58c85c2f281d44d4884bc96062288b864",
+    "packageJsonSha256": "7264bfa4275706af930190da9d90533e7b5d0b43a1f2cd87d99959ac38cbff89",
+    "nodeExecutableSha256": "995a3fb3cefad590cd3f4b321532a4b9582fb9c6575320ed2e3e894caac3e362"
+  },
+  "files": {
+    "tools/phase10-preflight-2026-11-01/backup/project.json": "b1fe31cf4d9526e758b4b5e1206e88d5a77d547828f5769be1c949e33b01153d",
+    "tools/phase10-preflight-2026-11-01/backup/database.json": "ce867495078dd56f9c9a9d4773ff4f80496e698bdd6a33a1b04a15aed48a70e1",
+    "tools/phase10-preflight-2026-11-01/backup/release.json": "e345c4960ae7f7963c8477581bf285afae71f9e08c68fa17aa5725e1f37c0e8a",
+    "tools/phase10-preflight-2026-11-01/backup/ruleset.json": "9037ba45c42eec300e65b5ae5e025223e04004dff06886f041546184a0939d37",
+    "tools/phase10-preflight-2026-11-01/backup/firestore.rules": "d3d6661464da65f0101bbc1304e1c452527f57d59216be8ec4e52d8cfe77029e",
+    "tools/phase10-preflight-2026-11-01/backup/indexes.published.json": "bbc378b986a923bd1d6c4ea46abb55ee63ab0fb09044c8e97e06d529e107d7c2",
+    "tools/phase10-preflight-2026-11-01/backup/fields.published.json": "c587b9aeb4ae063dbf8087942bff27d5355da044b05e8c1e89c14488e6f2adc3",
+    "tools/phase10-preflight-2026-11-01/backup/firestore.indexes.json": "6742255415c36daf631b52f233039190af819205cc41fa58d07dd7d9e180c2b9",
+    "tools/phase10-preflight-2026-11-01/backup/manifest.json": "33601758c78d1860291ace9fd110793e76de33205979f4c1cc37325504d98bbb",
+    "tools/phase10-preflight-2026-11-01/candidate/firestore.rules": "5eb5bc27e86afb3d5509bd6d5ace1beacb1de0f8bf4106c3b558434a0afb089f",
+    "tools/phase10-preflight-2026-11-01/candidate/firestore.indexes.json": "0851e25b02ee6d4084a3f0b2836e298bb96b3d3cd0ac8a877ab135b2a02480d7",
+    "firestore.rules": "5eb5bc27e86afb3d5509bd6d5ace1beacb1de0f8bf4106c3b558434a0afb089f",
+    "firestore.indexes.json": "0851e25b02ee6d4084a3f0b2836e298bb96b3d3cd0ac8a877ab135b2a02480d7",
+    "tools/phase10-activity-integrity/candidate/firestore.rules": "5eb5bc27e86afb3d5509bd6d5ace1beacb1de0f8bf4106c3b558434a0afb089f",
+    "tools/phase10-preflight-2026-11-01/firebase.rules.json": "5ab7c6477df5be749727d32ac7c48c714af53933d72968a3dd1ef88cfa223e59",
+    "tools/phase10-preflight-2026-11-01/firebase.indexes.json": "a8a3e8654a92be5a27f75d920e4ec093bb59f54d9aab76caf0518871398777e3",
+    "tools/phase10-preflight-2026-11-01/firebase.rollback.json": "45bb0ca8e2f5be02ffcddb2e4088279a050eb8e519114ef5511b92681a883f4a",
+    "lib/core/config/phase10_feature_flags.dart": "8403bf61213c28dd538b2935109429a442c5ac22124cb1f3c5fbe35d1af6eec9",
+    "firebase.json": "1dad17d6db941f0ca391ae54bd3ecfc304bc947c1bf65669f83ac03744ef564c",
+    ".firebaserc": "fc748b1527fbde7321c975356614f7d04a6d0c3839d24a0539ca6f1b8e5ef773",
+    "lib/main.dart": "bdf9247ff5942f7748c89484eea52705db61b4a3db9974c17f0383cd3a813bb6",
+    "lib/features/auth/presentation/auth_gate.dart": "415437bf8f1e8ca4546bb1ca063d7d32e8b4035641a55f2ef55d8571c9adff97",
+    "lib/features/child/child_shell.dart": "49debfda969ed68a35a7bf9c4ec557f620164a8c6b786b5e791b2bf0668fa970",
+    "lib/services/patient_activity_history_service.dart": "dc2d56418fa6822e33a0455a8788216bca5e3f5b10fa21f547f51f5402515d0b",
+    "lib/services/activity_execution_session_service.dart": "21e276b7d42eb0cc1159108087fb1985e0503ca94973daed6ee4348a0a442978",
+    "lib/services/psychologist_execution_metrics_service.dart": "538d6b716da5c295d37654159ceae4df0494188dd600519b0f297f27b4130088",
+    "tools/phase10-preflight-2026-11-01/read-published.cjs": "e8392efd7d622ae3c195276855f135e5198cdf1e09a93a83d011b3081622c8b9",
+    "tools/phase10-preflight-2026-11-01/verify-local.cjs": "e3c2c230772c831e027acc79d48aaf6bf4714e42c83519e60c5d8deca4af236e",
+    "tools/phase10-preflight-2026-11-01/read-published.test.cjs": "c9821673ed7639f50ea97559b5b90ede439cca046e1c1db02a94ef705f49225e",
+    "tools/phase10-preflight-2026-11-01/published-readonly.json": "304691fac5b153fe996008502fa3a097917db234bdc896197bc5ec7a6d3a24dd",
+    "tools/phase10-preflight-2026-11-01/rules.published-to-final.diff": "1acf092fa1e860c159fa30ea310537ad36963ff0350a35c381c9b7cc38037cc2",
+    "tools/phase10-preflight-2026-11-01/REPORT.md": "697b56065fd9dab437ac205319b46cc202e00dcea064802ace9108aa6cbda884",
+    "tools/phase10-android-final-evidence/flutter-analyze.log": "4a03154cc9f2b8e64433e360558997f285b37ccc90af3b40d9da6b7f0c1dcb46",
+    "tools/phase10-android-final-evidence/flutter-test-final.log": "54c47cd753ff56de0f9806b39f30649d9913bdced261b4e46f4245c74cf32014",
+    "tools/phase10-android-final-evidence/rules-test.log": "b86bb3e642c98db067a2bb7a09d4eef6b751645667d3b274f0864de862775fa3",
+    "tools/phase10-android-final-evidence/phase10-e2e-final.log": "6f5341900d784a28604f56d28f0b8c7219cf13751f6b11ef1d38c7a6776a5d88",
+    "tools/phase10-android-final-evidence/android-integral-transaction-fix.log": "1310f0c877c2c76a14efd5fd10e13b4d2703788a91c33471f3ba4c6423fcc517",
+    "tools/phase10-android-final-evidence/android-integral-confirmation.log": "4c01455d06fc1c062e8622cf140225c32c255496cde48807d1999820ab06353e"
+  },
+  "firebaseWrites": 0,
+  "networkCalls": 0,
+  "verification": {
+    "newOfflineMetadataTests": 10,
+    "existingFlutterTestsReviewed": 480,
+    "existingRulesTestsReviewed": 32,
+    "existingE2ESuitesReviewed": 12,
+    "existingAndroidTestsReviewed": 2,
+    "existingSuitesRerun": false,
+    "runtimeInstalledArtifactFlagsCertified": false
+  },
+  "deploymentExecuted": false,
+  "productionWrites": 0
+}

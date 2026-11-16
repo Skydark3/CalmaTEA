@@ -1,0 +1,680 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Función auxiliar para comprobar autenticación activa
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Función auxiliar para verificar propiedad del documento según UID
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function isAuthenticatedPsychologistUser() {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "psychologist";
+    }
+
+    function isAuthenticatedLinkedChildUser(childId) {
+      return isAuthenticated()
+        && linkedChildProfileMatches(childId);
+    }
+
+    function linkedChildProfileMatches(childId) {
+      let profile = get(
+        /databases/$(database)/documents/users/$(request.auth.uid)
+      ).data;
+      return profile.role == "child" && profile.childId == childId;
+    }
+
+    function isNonEmptyId(value) {
+      return value is string
+        && value.size() > 0
+        && !value.matches('.*[/].*');
+    }
+
+    // Colección users: creación y lectura exclusiva del propio usuario
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid)
+                    && request.resource.data.id == uid
+                    && request.resource.data.role == "psychologist"
+                    && request.resource.data.keys().hasAll(['id', 'name', 'email', 'role', 'createdAt'])
+                    && request.resource.data.keys().hasOnly(['id', 'name', 'email', 'role', 'createdAt']);
+      // En Fase 3.1 no existe edición de perfil de usuario; se bloquea actualización y eliminación
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Colección psychologists: creación y lectura exclusiva del propio profesional
+    match /psychologists/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid)
+                    && request.resource.data.id == uid
+                    && request.resource.data.userId == uid
+                    && request.resource.data.keys().hasAll(['id', 'userId', 'fullName', 'email', 'createdAt']);
+      // En Fase 3.1 no existe edición de perfil profesional; se bloquea actualización y eliminación
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Colección children: acceso exclusivo del psicólogo propietario (Fase 5A)
+    match /children/{childId} {
+
+      // Verifica que el usuario autenticado tenga role == "psychologist" en users/{uid}
+      function isAuthenticatedPsychologist() {
+        return isAuthenticated()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "psychologist";
+      }
+
+      // Verifica que el documento existente pertenece al psicólogo autenticado
+      function isChildOwner() {
+        return isAuthenticated()
+          && resource.data.psychologistId == request.auth.uid;
+      }
+
+      // CREATE:
+      //   - psychologistId en el payload debe coincidir con request.auth.uid
+      //   - campos mínimos reales enviados por ChildService.createChild():
+      //     'psychologistId', 'fullName', 'birthDate', 'supportLevel', 'createdAt'
+      //   - Nota: 'id' NO forma parte del payload (el service usa document.id del path)
+      allow create: if isAuthenticatedPsychologist()
+                    && request.resource.data.psychologistId == request.auth.uid
+                    && request.resource.data.keys().hasAll([
+                         'psychologistId',
+                         'fullName',
+                         'birthDate',
+                         'supportLevel',
+                         'createdAt'
+                       ]);
+
+      // READ: solo el psicólogo propietario
+      allow read: if isAuthenticatedPsychologist()
+                  && isChildOwner();
+
+      // UPDATE: solo el propietario; psychologistId es inmutable
+      allow update: if isAuthenticatedPsychologist()
+                    && isChildOwner()
+                    && request.resource.data.psychologistId == resource.data.psychologistId;
+
+      // DELETE: solo el psicólogo propietario
+      allow delete: if isAuthenticatedPsychologist()
+                    && isChildOwner();
+    }
+
+    // Colección therapies: acceso exclusivo del psicólogo propietario (Fase 6A)
+    match /therapies/{therapyId} {
+
+      function isAuthenticatedPsychologist() {
+        return isAuthenticated()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "psychologist";
+      }
+
+      function isTherapyOwner() {
+        return isAuthenticated()
+          && resource.data.psychologistId == request.auth.uid;
+      }
+
+      function relatedChildBelongsToPsychologist() {
+        return get(
+          /databases/$(database)/documents/children/$(request.resource.data.childId)
+        ).data.psychologistId == request.auth.uid;
+      }
+
+      function hasValidTherapyFields() {
+        return request.resource.data.keys().hasAll([
+                 'childId',
+                 'psychologistId',
+                 'type',
+                 'status',
+                 'startDate',
+                 'createdAt',
+                 'updatedAt'
+               ])
+               && request.resource.data.keys().hasOnly([
+                 'childId',
+                 'psychologistId',
+                 'type',
+                 'status',
+                 'startDate',
+                 'endDate',
+                 'notes',
+                 'createdAt',
+                 'updatedAt'
+               ])
+               && request.resource.data.type in [
+                 'occupational',
+                 'schoolOccupational',
+                 'physicalPsychomotor',
+                 'language',
+                 'psychology'
+               ]
+               && request.resource.data.status in [
+                 'active',
+                 'pending',
+                 'completed',
+                 'paused'
+               ];
+      }
+
+      allow create: if isAuthenticatedPsychologist()
+                    && request.resource.data.psychologistId == request.auth.uid
+                    && relatedChildBelongsToPsychologist()
+                    && hasValidTherapyFields();
+
+      allow read: if isAuthenticatedPsychologist()
+                  && isTherapyOwner();
+
+      allow update: if isAuthenticatedPsychologist()
+                    && isTherapyOwner()
+                    && request.resource.data.psychologistId == resource.data.psychologistId
+                    && request.resource.data.childId == resource.data.childId
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && relatedChildBelongsToPsychologist()
+                    && hasValidTherapyFields();
+
+      allow delete: if isAuthenticatedPsychologist()
+                    && isTherapyOwner();
+    }
+
+    // Colección activities: acceso exclusivo del psicólogo propietario (Fase 7A)
+    match /activities/{activityId} {
+
+      function isAuthenticatedPsychologist() {
+        return isAuthenticated()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "psychologist";
+      }
+
+      function isActivityOwner() {
+        return isAuthenticated()
+          && resource.data.psychologistId == request.auth.uid;
+      }
+
+      function isAuthenticatedLinkedChild() {
+        return isAuthenticated()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "child"
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId is string
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId.size() > 0
+          && !get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId.matches('.*[/].*');
+      }
+
+      function isVisibleToLinkedChild() {
+        return isAuthenticatedLinkedChild()
+          && resource.data.childId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId
+          && resource.data.status in ['assigned', 'inProgress'];
+      }
+
+      function relatedTherapyBelongsToPsychologist() {
+        return get(
+          /databases/$(database)/documents/therapies/$(request.resource.data.therapyId)
+        ).data.psychologistId == request.auth.uid;
+      }
+
+      function activityMatchesRelatedTherapy() {
+        return get(
+          /databases/$(database)/documents/therapies/$(request.resource.data.therapyId)
+        ).data.childId == request.resource.data.childId;
+      }
+
+      function hasValidActivityFields() {
+        return request.resource.data.keys().hasAll([
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'title',
+                 'description',
+                 'type',
+                 'difficulty',
+                 'instructions',
+                 'configuration',
+                 'status',
+                 'createdAt',
+                 'updatedAt'
+               ])
+               && request.resource.data.keys().hasOnly([
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'title',
+                 'description',
+                 'type',
+                 'difficulty',
+                 'instructions',
+                 'configuration',
+                 'status',
+                 'createdAt',
+                 'updatedAt'
+               ])
+               && request.resource.data.type in [
+                 'sequence',
+                 'dragDrop',
+                 'matching',
+                 'pictogram',
+                 'emotion',
+                 'tracing',
+                 'timer',
+                 'motor'
+               ]
+               && request.resource.data.status in [
+                 'assigned',
+                 'inProgress',
+                 'completed',
+                 'cancelled'
+               ];
+      }
+
+      allow create: if isAuthenticatedPsychologist()
+                    && request.resource.data.psychologistId == request.auth.uid
+                    && relatedTherapyBelongsToPsychologist()
+                    && activityMatchesRelatedTherapy()
+                    && hasValidActivityFields();
+
+      allow read: if (isAuthenticatedPsychologist() && isActivityOwner())
+                  || isVisibleToLinkedChild();
+
+      allow update: if isAuthenticatedPsychologist()
+                    && isActivityOwner()
+                    && request.resource.data.psychologistId == resource.data.psychologistId
+                    && request.resource.data.therapyId == resource.data.therapyId
+                    && request.resource.data.childId == resource.data.childId
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && relatedTherapyBelongsToPsychologist()
+                    && activityMatchesRelatedTherapy()
+                    && hasValidActivityFields();
+
+      allow delete: if isAuthenticatedPsychologist()
+                    && isActivityOwner();
+    }
+
+    // Ejecuciones infantiles: identidad derivada del perfil child y cierre
+    // inmutable. Una finalizacion exige crear su resultado en la misma escritura.
+    match /sessions/{sessionId} {
+      function activityPath() {
+        return /databases/$(database)/documents/activities/$(request.resource.data.activityId);
+      }
+
+      function resultPath() {
+        return /databases/$(database)/documents/activityResults/$(sessionId);
+      }
+
+      function activeSessionPath(childId) {
+        return /databases/$(database)/documents/activeExecutionSessions/$(childId);
+      }
+
+      function hasExactStartedFields() {
+        return request.resource.data.keys().hasAll([
+                 'id',
+                 'activityId',
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'childUserId',
+                 'status',
+                 'startedAt'
+               ])
+               && request.resource.data.keys().hasOnly([
+                 'id',
+                 'activityId',
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'childUserId',
+                 'status',
+                 'startedAt'
+               ]);
+      }
+
+      function hasExactClosedFields() {
+        return request.resource.data.keys().hasAll([
+                 'id',
+                 'activityId',
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'childUserId',
+                 'status',
+                 'startedAt',
+                 'endedAt'
+               ])
+               && request.resource.data.keys().hasOnly([
+                 'id',
+                 'activityId',
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'childUserId',
+                 'status',
+                 'startedAt',
+                 'endedAt'
+               ]);
+      }
+
+      function hasValidSessionIdentity() {
+        return request.resource.data.id == sessionId
+          && isNonEmptyId(request.resource.data.activityId)
+          && isNonEmptyId(request.resource.data.therapyId)
+          && isNonEmptyId(request.resource.data.childId)
+          && isNonEmptyId(request.resource.data.psychologistId)
+          && isNonEmptyId(request.resource.data.childUserId);
+      }
+
+      function matchesLinkedActivity() {
+        let activity = get(activityPath()).data;
+        return activity.childId == request.resource.data.childId
+          && activity.therapyId == request.resource.data.therapyId
+          && activity.psychologistId == request.resource.data.psychologistId
+          && activity.status in ['assigned', 'inProgress'];
+      }
+
+      function requestedSessionOwnsActiveLock() {
+        let lock = getAfter(
+          activeSessionPath(request.resource.data.childId)
+        ).data;
+        return lock.sessionId == sessionId
+          && lock.activityId == request.resource.data.activityId
+          && lock.childId == request.resource.data.childId
+          && lock.psychologistId == request.resource.data.psychologistId
+          && lock.childUserId == request.resource.data.childUserId
+          && lock.startedAt == request.resource.data.startedAt;
+      }
+
+      function existingSessionOwnsActiveLock() {
+        let lock = get(activeSessionPath(resource.data.childId)).data;
+        return lock.sessionId == sessionId
+          && lock.activityId == resource.data.activityId
+          && lock.childId == resource.data.childId
+          && lock.psychologistId == resource.data.psychologistId
+          && lock.childUserId == resource.data.childUserId
+          && lock.startedAt == resource.data.startedAt;
+      }
+
+      function childOwnsExistingSession() {
+        return isAuthenticatedLinkedChildUser(resource.data.childId)
+          && resource.data.childUserId == request.auth.uid;
+      }
+
+      function isValidStart() {
+        return hasExactStartedFields()
+          && hasValidSessionIdentity()
+          && request.resource.data.status == 'inProgress'
+          && request.resource.data.startedAt is timestamp
+          && request.resource.data.startedAt == request.time
+          && isAuthenticatedLinkedChildUser(request.resource.data.childId)
+          && request.resource.data.childUserId == request.auth.uid
+          && matchesLinkedActivity()
+          && existsAfter(activeSessionPath(request.resource.data.childId))
+          && requestedSessionOwnsActiveLock();
+      }
+
+      function isValidClose() {
+        return resource.data.status == 'inProgress'
+          && request.resource.data.status in ['completed', 'interrupted']
+          && hasExactClosedFields()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'status',
+               'endedAt'
+             ])
+          && request.resource.data.endedAt is timestamp
+          && request.resource.data.endedAt == request.time
+          && request.resource.data.endedAt >= resource.data.startedAt
+          && childOwnsExistingSession()
+          && exists(activeSessionPath(resource.data.childId))
+          && existingSessionOwnsActiveLock()
+          && !existsAfter(activeSessionPath(resource.data.childId))
+          && (request.resource.data.status == 'interrupted'
+              || existsAfter(resultPath()));
+      }
+
+      allow create: if isValidStart();
+      allow read: if childOwnsExistingSession()
+                  || (isAuthenticatedPsychologistUser()
+                      && resource.data.psychologistId == request.auth.uid);
+      allow update: if isValidClose();
+      allow delete: if false;
+    }
+
+    // Bloqueo transaccional: existe como máximo una sesión abierta por paciente.
+    match /activeExecutionSessions/{childId} {
+      function sessionPath(sessionId) {
+        return /databases/$(database)/documents/sessions/$(sessionId);
+      }
+
+      function hasExactLockFields() {
+        return request.resource.data.keys().hasAll([
+                 'sessionId',
+                 'activityId',
+                 'childId',
+                 'psychologistId',
+                 'childUserId',
+                 'startedAt'
+               ])
+               && request.resource.data.keys().hasOnly([
+                 'sessionId',
+                 'activityId',
+                 'childId',
+                 'psychologistId',
+                 'childUserId',
+                 'startedAt'
+               ]);
+      }
+
+      function requestedLockMatchesCreatedSession() {
+        let session = getAfter(
+          sessionPath(request.resource.data.sessionId)
+        ).data;
+        return session.status == 'inProgress'
+          && session.id == request.resource.data.sessionId
+          && session.activityId == request.resource.data.activityId
+          && session.childId == childId
+          && session.psychologistId == request.resource.data.psychologistId
+          && session.childUserId == request.resource.data.childUserId
+          && session.startedAt == request.resource.data.startedAt;
+      }
+
+      function existingLockMatchesSession(session) {
+        return session.data.id == resource.data.sessionId
+          && session.data.activityId == resource.data.activityId
+          && session.data.childId == childId
+          && session.data.psychologistId == resource.data.psychologistId
+          && session.data.childUserId == resource.data.childUserId
+          && session.data.startedAt == resource.data.startedAt;
+      }
+
+      function childOwnsRequestedLock() {
+        return request.resource.data.childId == childId
+          && request.resource.data.childUserId == request.auth.uid
+          && isAuthenticatedLinkedChildUser(childId);
+      }
+
+      function childOwnsExistingLock() {
+        return resource.data.childId == childId
+          && resource.data.childUserId == request.auth.uid
+          && isAuthenticatedLinkedChildUser(childId);
+      }
+
+      function linkedSessionIsTerminalOrClosesNow() {
+        let before = get(sessionPath(resource.data.sessionId));
+        let after = getAfter(sessionPath(resource.data.sessionId));
+        return existingLockMatchesSession(before)
+          && ((before.data.status in ['completed', 'interrupted'])
+              || (before.data.status == 'inProgress'
+                  && after.data.status in ['completed', 'interrupted']
+                  && existingLockMatchesSession(after)));
+      }
+
+      allow create: if hasExactLockFields()
+                    && request.resource.data.startedAt is timestamp
+                    && request.resource.data.startedAt == request.time
+                    && childOwnsRequestedLock()
+                    && existsAfter(
+                         sessionPath(request.resource.data.sessionId)
+                       )
+                    && requestedLockMatchesCreatedSession();
+      allow get: if isAuthenticatedLinkedChildUser(childId);
+      allow list: if false;
+      allow update: if false;
+      allow delete: if childOwnsExistingLock()
+                    && exists(sessionPath(resource.data.sessionId))
+                    && linkedSessionIsTerminalOrClosesNow();
+    }
+
+    // Resultados consolidados: un unico documento por sesion completada.
+    match /activityResults/{sessionId} {
+      function sessionPath() {
+        return /databases/$(database)/documents/sessions/$(sessionId);
+      }
+
+      function activityPath() {
+        return /databases/$(database)/documents/activities/$(request.resource.data.activityId);
+      }
+
+      function activeSessionPath() {
+        return /databases/$(database)/documents/activeExecutionSessions/$(request.resource.data.childId);
+      }
+
+      function hasExactResultFields() {
+        return request.resource.data.keys().hasAll([
+                 'id',
+                 'activityId',
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'childUserId',
+                 'activityType',
+                 'completedAt',
+                 'metrics',
+                 'schemaVersion'
+               ])
+               && request.resource.data.keys().hasOnly([
+                 'id',
+                 'activityId',
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'childUserId',
+                 'activityType',
+                 'completedAt',
+                 'durationSeconds',
+                 'metrics',
+                 'schemaVersion'
+               ]);
+      }
+
+      function hasValidResultIdentity() {
+        return request.resource.data.id == sessionId
+          && isNonEmptyId(request.resource.data.activityId)
+          && request.resource.data.childUserId == request.auth.uid
+          && isAuthenticatedLinkedChildUser(request.resource.data.childId);
+      }
+
+      function matchesSession(session) {
+        return session.data.id == sessionId
+          && session.data.activityId == request.resource.data.activityId
+          && session.data.therapyId == request.resource.data.therapyId
+          && session.data.childId == request.resource.data.childId
+          && session.data.psychologistId == request.resource.data.psychologistId
+          && session.data.childUserId == request.resource.data.childUserId;
+      }
+
+      function matchesActivity() {
+        let activity = get(activityPath()).data;
+        return activity.childId == request.resource.data.childId
+          && activity.therapyId == request.resource.data.therapyId
+          && activity.psychologistId == request.resource.data.psychologistId
+          && activity.type == request.resource.data.activityType;
+      }
+
+      function hasValidDuration() {
+        return !request.resource.data.keys().hasAny(['durationSeconds'])
+          || (request.resource.data.durationSeconds is int
+              && request.resource.data.durationSeconds >= 0);
+      }
+
+      function hasOnePositiveMetric(metrics, metricName) {
+        return metrics.keys().hasAll([metricName])
+          && metrics.keys().hasOnly([metricName])
+          && metrics[metricName] is int
+          && metrics[metricName] > 0;
+      }
+
+      function hasTwoPositiveMetrics(metrics, firstName, secondName) {
+        return metrics.keys().hasAll([firstName, secondName])
+          && metrics.keys().hasOnly([firstName, secondName])
+          && metrics[firstName] is int
+          && metrics[firstName] > 0
+          && metrics[secondName] is int
+          && metrics[secondName] > 0;
+      }
+
+      function hasValidTracingMetrics(metrics) {
+        return metrics.keys().hasAll(['practiceCompleted'])
+          && metrics.keys().hasOnly(['practiceCompleted', 'strokesCount'])
+          && metrics.practiceCompleted is bool
+          && metrics.practiceCompleted == true
+          && (!metrics.keys().hasAny(['strokesCount'])
+              || (metrics.strokesCount is int && metrics.strokesCount > 0));
+      }
+
+      function hasValidMetrics() {
+        return request.resource.data.metrics is map
+          && ((request.resource.data.activityType == 'sequence'
+               && hasTwoPositiveMetrics(request.resource.data.metrics, 'itemsCount', 'checksCount'))
+              || (request.resource.data.activityType == 'matching'
+                  && hasTwoPositiveMetrics(request.resource.data.metrics, 'relationsCompleted', 'checksCount'))
+              || (request.resource.data.activityType == 'emotion'
+                  && hasOnePositiveMetric(request.resource.data.metrics, 'exercisesReviewed'))
+              || (request.resource.data.activityType == 'pictogram'
+                  && hasOnePositiveMetric(request.resource.data.metrics, 'interactionsCount'))
+              || (request.resource.data.activityType == 'dragDrop'
+                  && hasTwoPositiveMetrics(request.resource.data.metrics, 'itemsPlaced', 'checksCount'))
+              || (request.resource.data.activityType == 'timer'
+                  && hasTwoPositiveMetrics(request.resource.data.metrics, 'configuredDurationSeconds', 'elapsedSeconds'))
+              || (request.resource.data.activityType == 'tracing'
+                  && hasValidTracingMetrics(request.resource.data.metrics))
+              || (request.resource.data.activityType == 'motor'
+                  && hasOnePositiveMetric(request.resource.data.metrics, 'stepsVisited')));
+      }
+
+      function isValidResultCreate() {
+        return hasExactResultFields()
+          && request.resource.data.completedAt is timestamp
+          && request.resource.data.completedAt == request.time
+          && request.resource.data.schemaVersion is int
+          && request.resource.data.schemaVersion == 1
+          && hasValidDuration()
+          && hasValidMetrics()
+          && hasValidResultIdentity()
+          && exists(sessionPath())
+          && get(sessionPath()).data.status == 'inProgress'
+          && matchesSession(get(sessionPath()))
+          && existsAfter(sessionPath())
+          && getAfter(sessionPath()).data.status == 'completed'
+          && getAfter(sessionPath()).data.endedAt == request.resource.data.completedAt
+          && exists(activeSessionPath())
+          && get(activeSessionPath()).data.sessionId == sessionId
+          && !existsAfter(activeSessionPath())
+          && matchesActivity();
+      }
+
+      function childOwnsResult() {
+        return isAuthenticatedLinkedChildUser(resource.data.childId)
+          && resource.data.childUserId == request.auth.uid;
+      }
+
+      allow create: if isValidResultCreate();
+      allow read: if childOwnsResult()
+                  || (isAuthenticatedPsychologistUser()
+                      && resource.data.psychologistId == request.auth.uid);
+      allow update, delete: if false;
+    }
+
+    // Denegación por defecto para cualquier otra ruta no especificada
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

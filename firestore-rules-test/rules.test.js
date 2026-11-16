@@ -337,7 +337,7 @@ describe("child activities security", () => {
     await assertFails(getDoc(doc(db, "therapies", "therapy-child-a")));
   });
 
-  it("keeps psychologist create, update and delete permissions", async () => {
+  it("keeps professional create/edit/cancel but forbids physical deletion", async () => {
     const db = testEnv.authenticatedContext("psych-a").firestore();
     const createdActivity = doc(db, "activities", "psych-created");
     await assertSucceeds(
@@ -353,7 +353,48 @@ describe("child activities security", () => {
     await assertSucceeds(
       updateDoc(createdActivity, { title: "Actividad actualizada" }),
     );
-    await assertSucceeds(deleteDoc(createdActivity));
+    await assertFails(deleteDoc(createdActivity));
+    await assertSucceeds(updateDoc(createdActivity, { status: "cancelled" }));
+    assert.equal((await getDoc(createdActivity)).data().status, "cancelled");
+  });
+
+  it("keeps the type immutable for all eight engines, even with empty configuration", async () => {
+    const db = testEnv.authenticatedContext("psych-a").firestore();
+    for (const type of ["sequence", "matching", "emotion", "pictogram", "dragDrop", "timer", "tracing", "motor"]) {
+      const reference = doc(db, "activities", `immutable-type-${type}`);
+      await assertSucceeds(setDoc(reference, activity({ childId: "child-a", psychologistId: "psych-a", status: "assigned", type })));
+      await assertFails(updateDoc(reference, { type: type === "timer" ? "sequence" : "timer", configuration: {} }));
+      assert.equal((await getDoc(reference)).data().type, type);
+      await assertSucceeds(updateDoc(reference, { status: "cancelled" }));
+      await assertFails(updateDoc(reference, { type: type === "timer" ? "sequence" : "timer" }));
+      await assertFails(deleteDoc(reference));
+    }
+  });
+
+  it("retains an activity with active/completed sessions and preserves its unique result", async () => {
+    const child = childDb();
+    const owner = testEnv.authenticatedContext("psych-a").firestore();
+    const outsider = testEnv.authenticatedContext("psych-b").firestore();
+    const reference = doc(owner, "activities", "child-a-assigned");
+    await assertSucceeds(createSession(child, "integrity-session"));
+    await assertFails(deleteDoc(reference));
+    await assertFails(updateDoc(reference, { type: "timer", configuration: { version: 1, durationSeconds: 30 } }));
+    await assertFails(deleteDoc(doc(outsider, "activities", "child-a-assigned")));
+    await assertFails(getDoc(doc(childDb("child-b-auth"), "sessions", "integrity-session")));
+    await assertSucceeds(updateDoc(reference, { status: "cancelled" }));
+    await assertSucceeds(completeSession(child, "integrity-session"));
+    await assertFails(createSession(child, "new-cancelled-session"));
+    await assertFails(deleteDoc(reference));
+    await assertFails(completeSession(child, "integrity-session"));
+    const history = await getDocs(query(collection(owner, "sessions"), where("psychologistId", "==", "psych-a"), where("childId", "==", "child-a")));
+    const results = await getDocs(query(collection(owner, "activityResults"), where("psychologistId", "==", "psych-a"), where("childId", "==", "child-a")));
+    assert.equal(history.docs.length, 1);
+    assert.equal(history.docs[0].data().status, "completed");
+    assert.equal(results.docs.length, 1);
+    assert.equal(results.docs[0].data().activityType, "sequence");
+    assert.equal((await getDoc(reference)).data().type, "sequence");
+    assert.equal((await getDoc(reference)).data().status, "cancelled");
+    await assertFails(getDoc(doc(outsider, "activityResults", "integrity-session")));
   });
 
   it("supports one-step configured assignment and linked-child read for all activity types", async () => {
@@ -444,6 +485,70 @@ describe("child activities security", () => {
 describe("execution sessions security", () => {
   it("allows a linked child to start a session with server timestamp", async () => {
     await assertSucceeds(createSession(childDb(), "session-valid"));
+  });
+
+  it("enforces one active lock and hides it from unrelated users", async () => {
+    const owner = childDb();
+    await assertSucceeds(createSession(owner, "session-first-lock"));
+    await assertSucceeds(
+      getDoc(doc(owner, "activeExecutionSessions", "child-a")),
+    );
+    await assertFails(createSession(owner, "session-second-lock"));
+    await assertFails(
+      getDoc(
+        doc(
+          childDb("child-b-auth"),
+          "activeExecutionSessions",
+          "child-a",
+        ),
+      ),
+    );
+    await assertFails(
+      getDoc(
+        doc(
+          testEnv.authenticatedContext("psych-a").firestore(),
+          "activeExecutionSessions",
+          "child-a",
+        ),
+      ),
+    );
+    await assertFails(
+      deleteDoc(doc(owner, "activeExecutionSessions", "child-a")),
+    );
+  });
+
+  it("allows the linked child to release a stale terminal lock", async () => {
+    const startedAt = new Date("2026-10-08T12:30:00Z");
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await Promise.all([
+        setDoc(doc(db, "sessions", "session-stale-lock"), {
+          id: "session-stale-lock",
+          activityId: "child-a-assigned",
+          therapyId: "therapy-child-a",
+          childId: "child-a",
+          psychologistId: "psych-a",
+          childUserId: "child-a-auth",
+          status: "interrupted",
+          startedAt,
+          endedAt: startedAt,
+        }),
+        setDoc(doc(db, "activeExecutionSessions", "child-a"), {
+          sessionId: "session-stale-lock",
+          activityId: "child-a-assigned",
+          childId: "child-a",
+          psychologistId: "psych-a",
+          childUserId: "child-a-auth",
+          startedAt,
+        }),
+      ]);
+    });
+
+    await assertSucceeds(
+      deleteDoc(
+        doc(childDb(), "activeExecutionSessions", "child-a"),
+      ),
+    );
   });
 
   it("denies sessions for another child or forged ownership", async () => {
@@ -563,16 +668,47 @@ describe("activity results security", () => {
     }
   });
 
-  it("keeps closure possible after the professional changes activity status", async () => {
-    const db = childDb();
-    await assertSucceeds(createSession(db, "session-status-change"));
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await updateDoc(
-        doc(context.firestore(), "activities", "child-a-assigned"),
-        { status: "completed" },
-      );
+  for (const status of ["completed", "cancelled"]) {
+    it(`completes after ${status} without granting activity read or a new start`, async () => {
+      const db = childDb();
+      await assertSucceeds(createSession(db, "session-status-change"));
+      await assertSucceeds(updateDoc(
+        doc(testEnv.authenticatedContext("psych-a").firestore(), "activities", "child-a-assigned"),
+        { status },
+      ));
+      await assertFails(getDoc(doc(db, "activities", "child-a-assigned")));
+      await assertSucceeds(completeSession(db, "session-status-change"));
+      await assertFails(createSession(db, "session-new-terminal"));
+      await assertFails(completeSession(db, "session-status-change"));
+      assert.equal((await getDoc(doc(db, "activeExecutionSessions", "child-a"))).exists(), false);
     });
-    await assertSucceeds(completeSession(db, "session-status-change"));
+
+    it(`interrupts after ${status} without a result`, async () => {
+      const db = childDb();
+      await createSession(db, "session-interrupt-status");
+      await updateDoc(doc(testEnv.authenticatedContext("psych-a").firestore(), "activities", "child-a-assigned"), { status });
+      await assertSucceeds(interruptSession(db, "session-interrupt-status"));
+      assert.equal((await getDoc(doc(db, "activeExecutionSessions", "child-a"))).exists(), false);
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        assert.equal((await getDoc(doc(context.firestore(), "activityResults", "session-interrupt-status"))).exists(), false);
+      });
+    });
+  }
+
+  it("keeps ownership checks after cancellation and never releases another lock", async () => {
+    const db = childDb();
+    await createSession(db, "session-cancelled-owner");
+    await updateDoc(doc(testEnv.authenticatedContext("psych-a").firestore(), "activities", "child-a-assigned"), { status: "cancelled" });
+    await assertFails(completeSession(childDb("child-b-auth"), "session-cancelled-owner"));
+    const wrongLockBatch = writeBatch(db);
+    wrongLockBatch.update(doc(db, "sessions", "session-cancelled-owner"), { status: "completed", endedAt: serverTimestamp() });
+    wrongLockBatch.set(doc(db, "activityResults", "session-cancelled-owner"), result({ id: "session-cancelled-owner" }));
+    wrongLockBatch.delete(doc(db, "activeExecutionSessions", "child-b"));
+    await assertFails(wrongLockBatch.commit());
+    assert.equal((await getDoc(doc(db, "sessions", "session-cancelled-owner"))).data().status, "inProgress");
+    assert.equal((await getDoc(doc(db, "activeExecutionSessions", "child-a"))).data().sessionId, "session-cancelled-owner");
+    await assertSucceeds(completeSession(db, "session-cancelled-owner"));
+    await assertFails(getDoc(doc(testEnv.authenticatedContext("psych-b").firestore(), "activityResults", "session-cancelled-owner")));
   });
 
   it("accepts only the aggregate schema defined for each motor", async () => {

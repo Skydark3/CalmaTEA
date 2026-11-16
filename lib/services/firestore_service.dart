@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../core/constants/firestore_collections.dart';
 
 /// Servicio base para encapsular el acceso a Cloud Firestore.
@@ -7,7 +8,7 @@ class FirestoreService {
   final FirebaseFirestore _firestore;
 
   FirestoreService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   FirebaseFirestore get instance => _firestore;
 
@@ -32,6 +33,7 @@ class FirestoreService {
   CollectionReference<Map<String, dynamic>> get sessionsCollection =>
       _firestore.collection(FirestoreCollections.sessions);
 
-  CollectionReference<Map<String, dynamic>> get activeExecutionSessionsCollection =>
+  CollectionReference<Map<String, dynamic>>
+  get activeExecutionSessionsCollection =>
       _firestore.collection(FirestoreCollections.activeExecutionSessions);
 }

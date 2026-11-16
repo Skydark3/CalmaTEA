@@ -1,4 +1,4 @@
-<<<<<<<<<<import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'package:tea_app/features/activities/config/activity_configuration_summary.dart';
 import 'package:tea_app/features/activities/config/models/activity_configurations.dart';

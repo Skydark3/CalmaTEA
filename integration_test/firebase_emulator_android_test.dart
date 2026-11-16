@@ -9,6 +9,8 @@ import 'package:tea_app/core/firebase/firebase_bootstrap.dart';
 import 'package:tea_app/main.dart' as app;
 import 'package:tea_app/models/activity_model.dart';
 
+import 'activity_session_status_change_checks.dart';
+
 const _localPassword = 'CalmaTEA-Local-Only-2026!';
 
 void main() {
@@ -44,7 +46,7 @@ void main() {
 
     debugPrint('Android validation step: motor');
     await _openActivity(tester, 'Motor local');
-    expect(find.text('Paso 1 de 2'), findsOneWidget);
+    await _waitFor(tester, find.text('Paso 1 de 2'));
     await tester.tap(find.text('Siguiente paso'));
     await tester.pump();
     expect(find.text('Paso 2 de 2'), findsOneWidget);
@@ -61,8 +63,10 @@ void main() {
       const Offset(60, 40),
     );
     await tester.pump();
-    await tester.scrollUntilVisible(find.text('Deshacer'), 180);
-    await tester.tap(find.text('Deshacer'));
+    final undoTracing = find.widgetWithText(OutlinedButton, 'Deshacer');
+    await tester.ensureVisible(undoTracing);
+    await tester.pumpAndSettle();
+    await tester.tap(undoTracing.hitTestable());
     await tester.pump();
     await tester.ensureVisible(canvas);
     await tester.dragFrom(
@@ -70,8 +74,10 @@ void main() {
       const Offset(40, 20),
     );
     await tester.pump();
-    await tester.scrollUntilVisible(find.text('Limpiar'), 180);
-    await tester.tap(find.text('Limpiar'));
+    final clearTracing = find.widgetWithText(OutlinedButton, 'Limpiar');
+    await tester.ensureVisible(clearTracing);
+    await tester.pumpAndSettle();
+    await tester.tap(clearTracing.hitTestable());
     await tester.pump();
     await _returnToActivities(tester);
 
@@ -232,6 +238,14 @@ void main() {
     await tester.scrollUntilVisible(find.text('Temporizador configurado'), 350);
     await _waitFor(tester, find.text('Temporizador configurado'));
   });
+
+  testWidgets(
+    'el servicio Dart cierra sesiones tras cancelar o finalizar actividades',
+    (tester) async {
+      await verifyActivitySessionStatusChanges();
+    },
+    timeout: const Timeout(Duration(minutes: 5)),
+  );
 }
 
 Future<void> _tapCardByText(WidgetTester tester, String text) async {
@@ -307,30 +321,59 @@ Future<void> _waitForAuthenticated(
 }
 
 Future<void> _openActivity(WidgetTester tester, String title) async {
-  final titleFinder = find.text(title);
+  await tester.pumpAndSettle();
+  final titleFinder = _currentRouteText(title);
   if (titleFinder.evaluate().isEmpty) {
     await tester.scrollUntilVisible(titleFinder, 260);
   } else {
     await tester.ensureVisible(titleFinder);
   }
-  final card = find
+  final cardElement = find
       .ancestor(of: titleFinder, matching: find.byType(Card))
-      .first;
+      .evaluate()
+      .single;
+  // Keep the element identity while scrolling; a title-based lazy finder can
+  // lose its ancestor as the previous route finishes its transition.
+  final card = find.byElementPredicate(
+    (element) => identical(element, cardElement),
+  );
   final startButton = find.descendant(
     of: card,
     matching: find.widgetWithText(ElevatedButton, 'Comenzar'),
   );
-  await tester.tap(startButton);
+  await tester.ensureVisible(startButton);
   await tester.pumpAndSettle();
-  expect(find.text(title), findsWidgets);
+  await tester.tap(startButton.hitTestable());
+  final engineReady = switch (title) {
+    'Motor local' => find.byKey(const ValueKey('motor-step-progress')),
+    'Tracing local' => find.byKey(const ValueKey('tracing-canvas')),
+    'Timer local' => _currentRouteText('Iniciar'),
+    'Drag Drop local' => find.byKey(const ValueKey('drag-drop-item-apple')),
+    'Pictogramas local' => find.byKey(
+      const ValueKey('pictogram-option-pictogram-water'),
+    ),
+    'Emociones local' => find.byType(TextField),
+    'Matching local' => _currentRouteText('Gato'),
+    'Secuencia local' => _currentRouteText('Comprobar'),
+    _ => throw StateError('Missing engine readiness assertion.'),
+  };
+  await _waitFor(tester, engineReady);
+  await tester.pumpAndSettle();
 }
+
+Finder _currentRouteText(String text) => find.byElementPredicate((element) {
+  final widget = element.widget;
+  return widget is Text &&
+      widget.data == text &&
+      ModalRoute.of(element)?.isCurrent == true;
+});
 
 Future<void> _returnToActivities(
   WidgetTester tester, {
   bool waitForCompletion = false,
 }) async {
   final returnButton = find.byKey(const ValueKey('activity-execution-return'));
-  final activitiesTitle = find.text('Mis actividades');
+  final activitiesTitle = _currentRouteText('Mis actividades');
   if (waitForCompletion) {
     await _waitFor(tester, returnButton);
   }
@@ -376,6 +419,7 @@ Future<void> _returnToActivities(
     await tester.pump(const Duration(milliseconds: 250));
   }
   await _waitFor(tester, activitiesTitle);
+  await tester.pumpAndSettle();
 }
 
 Future<void> _waitFor(

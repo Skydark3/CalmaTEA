@@ -14,12 +14,14 @@ class EditActivityScreen extends StatefulWidget {
   final ActivityModel activity;
   final TherapyModel therapy;
   final ChildModel child;
+  final ActivityService? activityService;
 
   const EditActivityScreen({
     super.key,
     required this.activity,
     required this.therapy,
     required this.child,
+    this.activityService,
   });
 
   @override
@@ -28,22 +30,21 @@ class EditActivityScreen extends StatefulWidget {
 
 class _EditActivityScreenState extends State<EditActivityScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _activityService = ActivityService();
+  late final ActivityService _activityService;
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _difficultyController;
   late final TextEditingController _instructionsController;
 
-  late ActivityType _activityType;
+  late final ActivityType _activityType;
   late ActivityStatus _status;
   String? _submitError;
   bool _isLoading = false;
 
-  bool get _canChangeType => widget.activity.configuration.isEmpty;
-
   @override
   void initState() {
     super.initState();
+    _activityService = widget.activityService ?? ActivityService();
     _titleController = TextEditingController(text: widget.activity.title);
     _descriptionController = TextEditingController(
       text: widget.activity.description,
@@ -191,12 +192,12 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
               const SizedBox(height: 18),
               DropdownButtonFormField<ActivityType>(
                 initialValue: _activityType,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Tipo de actividad',
                   prefixIcon: const Icon(Icons.category_outlined),
-                  helperText: _canChangeType
-                      ? null
-                      : 'No puede cambiarse mientras exista configuración.',
+                  helperMaxLines: 3,
+                  helperText:
+                      'El tipo se conserva después de asignar la actividad.',
                 ),
                 isExpanded: true,
                 items: ActivityType.values
@@ -210,12 +211,7 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
                       ),
                     )
                     .toList(),
-                onChanged: _isLoading || !_canChangeType
-                    ? null
-                    : (value) {
-                        if (value == null) return;
-                        setState(() => _activityType = value);
-                      },
+                onChanged: null,
               ),
               const SizedBox(height: 18),
               TextFormField(
@@ -245,6 +241,8 @@ class _EditActivityScreenState extends State<EditActivityScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Estado',
                   prefixIcon: Icon(Icons.info_outline_rounded),
+                  helperMaxLines: 3,
+                  helperText: 'Selecciona Cancelada para retirarla sin borrar su historial.',
                 ),
                 isExpanded: true,
                 items: ActivityStatus.values

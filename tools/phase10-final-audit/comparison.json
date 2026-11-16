@@ -1,0 +1,63 @@
+{
+  "projectId": "calmatea-4c781",
+  "verifiedBackupFiles": 8,
+  "existingCollections": [
+    {
+      "collection": "users/{uid}",
+      "byteIdenticalUtf8": true,
+      "sha256": "bf36a421b0577d503b943b86c5bd8cdf156644260172ab8c33796f7c62cbb761"
+    },
+    {
+      "collection": "psychologists/{uid}",
+      "byteIdenticalUtf8": true,
+      "sha256": "a5b774edf2023a525008ac82e00dd964df97677f75999dc8807ed2f475b16f24"
+    },
+    {
+      "collection": "children/{childId}",
+      "byteIdenticalUtf8": true,
+      "sha256": "ca9ab54ff472bd0ae8ab54042b134ba4accb42660ffbed0f00305585d9ac883f"
+    },
+    {
+      "collection": "therapies/{therapyId}",
+      "byteIdenticalUtf8": true,
+      "sha256": "d577dc8327449694430b8fa9b88c8d3da32d28a536a8ef8cc6bb2c69c8d1d8de"
+    },
+    {
+      "collection": "activities/{activityId}",
+      "byteIdenticalUtf8": true,
+      "sha256": "e5473a33021bd86fb0bd51c5154ef1fdf9c4713484da8fc0f70f0edd1dc8a8a4"
+    }
+  ],
+  "existingSharedHelpersIdentical": true,
+  "publishedIndexConfig": {
+    "indexes": [],
+    "fieldOverrides": []
+  },
+  "proposedIndexConfig": {
+    "indexes": [
+      {
+        "collectionGroup": "sessions",
+        "queryScope": "COLLECTION",
+        "fields": [
+          {
+            "fieldPath": "psychologistId",
+            "order": "ASCENDING"
+          },
+          {
+            "fieldPath": "childId",
+            "order": "ASCENDING"
+          },
+          {
+            "fieldPath": "startedAt",
+            "order": "DESCENDING"
+          }
+        ]
+      }
+    ],
+    "fieldOverrides": []
+  },
+  "proposedSha256": {
+    "firestore.rules": "3558adfbaa08e23a736b9ea20835114426c49a0c542a58ddf5a8ff3229b5ff0a",
+    "firestore.indexes.json": "0851e25b02ee6d4084a3f0b2836e298bb96b3d3cd0ac8a877ab135b2a02480d7"
+  }
+}

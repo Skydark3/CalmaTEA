@@ -23,8 +23,7 @@ class ChildActivitiesScreen extends StatelessWidget {
     ActivityModel activity,
   ) async {
     if (executionRouter.mode != ActivityExecutionMode.persistent) return true;
-    final coordinator =
-        sessionCoordinator ?? ActivityExecutionSessionService();
+    final coordinator = sessionCoordinator ?? ActivityExecutionSessionService();
     try {
       await coordinator.startSession(activityId: activity.id);
       return true;

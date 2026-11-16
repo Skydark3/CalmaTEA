@@ -1,0 +1,283 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Función auxiliar para comprobar autenticación activa
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Función auxiliar para verificar propiedad del documento según UID
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // Colección users: creación y lectura exclusiva del propio usuario
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid)
+                    && request.resource.data.id == uid
+                    && request.resource.data.role == "psychologist"
+                    && request.resource.data.keys().hasAll(['id', 'name', 'email', 'role', 'createdAt'])
+                    && request.resource.data.keys().hasOnly(['id', 'name', 'email', 'role', 'createdAt']);
+      // En Fase 3.1 no existe edición de perfil de usuario; se bloquea actualización y eliminación
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Colección psychologists: creación y lectura exclusiva del propio profesional
+    match /psychologists/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid)
+                    && request.resource.data.id == uid
+                    && request.resource.data.userId == uid
+                    && request.resource.data.keys().hasAll(['id', 'userId', 'fullName', 'email', 'createdAt']);
+      // En Fase 3.1 no existe edición de perfil profesional; se bloquea actualización y eliminación
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Colección children: acceso exclusivo del psicólogo propietario (Fase 5A)
+    match /children/{childId} {
+
+      // Verifica que el usuario autenticado tenga role == "psychologist" en users/{uid}
+      function isAuthenticatedPsychologist() {
+        return isAuthenticated()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "psychologist";
+      }
+
+      // Verifica que el documento existente pertenece al psicólogo autenticado
+      function isChildOwner() {
+        return isAuthenticated()
+          && resource.data.psychologistId == request.auth.uid;
+      }
+
+      // CREATE:
+      //   - psychologistId en el payload debe coincidir con request.auth.uid
+      //   - campos mínimos reales enviados por ChildService.createChild():
+      //     'psychologistId', 'fullName', 'birthDate', 'supportLevel', 'createdAt'
+      //   - Nota: 'id' NO forma parte del payload (el service usa document.id del path)
+      allow create: if isAuthenticatedPsychologist()
+                    && request.resource.data.psychologistId == request.auth.uid
+                    && request.resource.data.keys().hasAll([
+                         'psychologistId',
+                         'fullName',
+                         'birthDate',
+                         'supportLevel',
+                         'createdAt'
+                       ]);
+
+      // READ: solo el psicólogo propietario
+      allow read: if isAuthenticatedPsychologist()
+                  && isChildOwner();
+
+      // UPDATE: solo el propietario; psychologistId es inmutable
+      allow update: if isAuthenticatedPsychologist()
+                    && isChildOwner()
+                    && request.resource.data.psychologistId == resource.data.psychologistId;
+
+      // DELETE: solo el psicólogo propietario
+      allow delete: if isAuthenticatedPsychologist()
+                    && isChildOwner();
+    }
+
+    // Colección therapies: acceso exclusivo del psicólogo propietario (Fase 6A)
+    match /therapies/{therapyId} {
+
+      function isAuthenticatedPsychologist() {
+        return isAuthenticated()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "psychologist";
+      }
+
+      function isTherapyOwner() {
+        return isAuthenticated()
+          && resource.data.psychologistId == request.auth.uid;
+      }
+
+      function relatedChildBelongsToPsychologist() {
+        return get(
+          /databases/$(database)/documents/children/$(request.resource.data.childId)
+        ).data.psychologistId == request.auth.uid;
+      }
+
+      function hasValidTherapyFields() {
+        return request.resource.data.keys().hasAll([
+                 'childId',
+                 'psychologistId',
+                 'type',
+                 'status',
+                 'startDate',
+                 'createdAt',
+                 'updatedAt'
+               ])
+               && request.resource.data.keys().hasOnly([
+                 'childId',
+                 'psychologistId',
+                 'type',
+                 'status',
+                 'startDate',
+                 'endDate',
+                 'notes',
+                 'createdAt',
+                 'updatedAt'
+               ])
+               && request.resource.data.type in [
+                 'occupational',
+                 'schoolOccupational',
+                 'physicalPsychomotor',
+                 'language',
+                 'psychology'
+               ]
+               && request.resource.data.status in [
+                 'active',
+                 'pending',
+                 'completed',
+                 'paused'
+               ];
+      }
+
+      allow create: if isAuthenticatedPsychologist()
+                    && request.resource.data.psychologistId == request.auth.uid
+                    && relatedChildBelongsToPsychologist()
+                    && hasValidTherapyFields();
+
+      allow read: if isAuthenticatedPsychologist()
+                  && isTherapyOwner();
+
+      allow update: if isAuthenticatedPsychologist()
+                    && isTherapyOwner()
+                    && request.resource.data.psychologistId == resource.data.psychologistId
+                    && request.resource.data.childId == resource.data.childId
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && relatedChildBelongsToPsychologist()
+                    && hasValidTherapyFields();
+
+      allow delete: if isAuthenticatedPsychologist()
+                    && isTherapyOwner();
+    }
+
+    // Colección activities: acceso exclusivo del psicólogo propietario (Fase 7A)
+    match /activities/{activityId} {
+
+      function isAuthenticatedPsychologist() {
+        return isAuthenticated()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "psychologist";
+      }
+
+      function isActivityOwner() {
+        return isAuthenticated()
+          && resource.data.psychologistId == request.auth.uid;
+      }
+
+      function isAuthenticatedLinkedChild() {
+        return isAuthenticated()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "child"
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId is string
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId.size() > 0
+          && !get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId.matches('.*[/].*');
+      }
+
+      function isVisibleToLinkedChild() {
+        return isAuthenticatedLinkedChild()
+          && resource.data.childId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId
+          && resource.data.status in ['assigned', 'inProgress'];
+      }
+
+      function relatedTherapyBelongsToPsychologist() {
+        return get(
+          /databases/$(database)/documents/therapies/$(request.resource.data.therapyId)
+        ).data.psychologistId == request.auth.uid;
+      }
+
+      function activityMatchesRelatedTherapy() {
+        return get(
+          /databases/$(database)/documents/therapies/$(request.resource.data.therapyId)
+        ).data.childId == request.resource.data.childId;
+      }
+
+      function hasValidActivityFields() {
+        return request.resource.data.keys().hasAll([
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'title',
+                 'description',
+                 'type',
+                 'difficulty',
+                 'instructions',
+                 'configuration',
+                 'status',
+                 'createdAt',
+                 'updatedAt'
+               ])
+               && request.resource.data.keys().hasOnly([
+                 'therapyId',
+                 'childId',
+                 'psychologistId',
+                 'title',
+                 'description',
+                 'type',
+                 'difficulty',
+                 'instructions',
+                 'configuration',
+                 'status',
+                 'createdAt',
+                 'updatedAt'
+               ])
+               && request.resource.data.type in [
+                 'sequence',
+                 'dragDrop',
+                 'matching',
+                 'pictogram',
+                 'emotion',
+                 'tracing',
+                 'timer',
+                 'motor'
+               ]
+               && request.resource.data.status in [
+                 'assigned',
+                 'inProgress',
+                 'completed',
+                 'cancelled'
+               ];
+      }
+
+      allow create: if isAuthenticatedPsychologist()
+                    && request.resource.data.psychologistId == request.auth.uid
+                    && relatedTherapyBelongsToPsychologist()
+                    && activityMatchesRelatedTherapy()
+                    && hasValidActivityFields();
+
+      allow read: if (isAuthenticatedPsychologist() && isActivityOwner())
+                  || isVisibleToLinkedChild();
+
+      allow update: if isAuthenticatedPsychologist()
+                    && isActivityOwner()
+                    && request.resource.data.psychologistId == resource.data.psychologistId
+                    && request.resource.data.therapyId == resource.data.therapyId
+                    && request.resource.data.childId == resource.data.childId
+                    && request.resource.data.createdAt == resource.data.createdAt
+                    && relatedTherapyBelongsToPsychologist()
+                    && activityMatchesRelatedTherapy()
+                    && hasValidActivityFields();
+
+      allow delete: if isAuthenticatedPsychologist()
+                    && isActivityOwner();
+    }
+
+    match /activityResults/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /sessions/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Denegación por defecto para cualquier otra ruta no especificada
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "checkedAtUtc": "2026-11-01T21:33:20.208Z",
+  "mode": "--preflight",
+  "projectId": "calmatea-4c781",
+  "databaseId": "(default)",
+  "databaseLocation": "southamerica-west1",
+  "releaseName": "projects/calmatea-4c781/releases/cloud.firestore",
+  "rulesetName": "projects/calmatea-4c781/rulesets/e906613f-fbdc-43c0-abbc-d548cfeeac45",
+  "releaseUpdateTime": "2026-10-08T18:50:32.162159Z",
+  "rulesSha256": "d3d6661464da65f0101bbc1304e1c452527f57d59216be8ec4e52d8cfe77029e",
+  "indexes": [],
+  "fieldPolicyMatchesBackup": true,
+  "releaseStableDuringRead": true,
+  "applicationDocumentsRead": 0,
+  "firebaseWrites": 0,
+  "metadataMethods": ["GET"]
+}

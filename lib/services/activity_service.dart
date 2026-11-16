@@ -122,11 +122,13 @@ class ActivityService {
       activity.id,
       activity.psychologistId,
     );
+    if (document.data()['type'] != activity.type.name) {
+      throw StateError('El tipo de una actividad asignada no puede cambiarse.');
+    }
 
     await document.reference.update({
       'title': activity.title,
       'description': activity.description,
-      'type': activity.type.name,
       'difficulty': activity.difficulty,
       'instructions': activity.instructions,
       'configuration': activity.configuration,
@@ -135,9 +137,13 @@ class ActivityService {
     });
   }
 
+  /// Conserva la firma por compatibilidad, pero nunca borra documentos.
+  /// Para retirar una actividad, usar updateActivity con status cancelled.
   Future<void> deleteActivity(String activityId, String psychologistId) async {
-    final document = await _ownedActivityDocument(activityId, psychologistId);
-    await document.reference.delete();
+    await _ownedActivityDocument(activityId, psychologistId);
+    throw StateError(
+      'Las actividades no se eliminan. Usa el estado Cancelada para retirarlas.',
+    );
   }
 
   Query<Map<String, dynamic>> _activitiesByTherapy(

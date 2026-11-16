@@ -18,6 +18,10 @@ const {
   serverTimestamp,
   where,
 } = require("firebase/firestore");
+const {
+  createSessionWithLock,
+  releaseSessionLock,
+} = require("./active-execution-session-test-helper");
 
 const projectId = "demo-calmatea-local";
 const childEmail = "child@calmatea.test";
@@ -77,7 +81,7 @@ async function startEmotionSession(activityId) {
     assert.equal(activity.data().childId, profile.data().childId);
     assert.equal(activity.data().type, "emotion");
 
-    transaction.set(sessionReference, {
+    createSessionWithLock(transaction, db, sessionReference, {
       id: sessionReference.id,
       activityId,
       therapyId: activity.data().therapyId,
@@ -121,6 +125,7 @@ async function completeEmotionSession(sessionId, exercisesReviewed) {
       metrics: { exercisesReviewed },
       schemaVersion: 1,
     });
+    releaseSessionLock(transaction, db, session.data().childId);
   });
 }
 
@@ -133,6 +138,7 @@ async function interruptEmotionSession(sessionId) {
       status: "interrupted",
       endedAt: serverTimestamp(),
     });
+    releaseSessionLock(transaction, db, session.data().childId);
   });
 }
 

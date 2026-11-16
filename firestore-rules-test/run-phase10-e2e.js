@@ -12,6 +12,7 @@ const scripts = [
   "test:professional-history-e2e",
   "test:execution-metrics-e2e",
   "test:phase10-integral-e2e",
+  "test:active-session-e2e",
 ];
 
 for (const script of scripts) {

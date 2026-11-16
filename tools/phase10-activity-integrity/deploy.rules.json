@@ -1,0 +1,5 @@
+{
+  "firestore": {
+    "rules": "C:/TEA/tools/phase10-activity-integrity/candidate/firestore.rules"
+  }
+}

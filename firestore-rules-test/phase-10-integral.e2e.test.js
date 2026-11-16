@@ -23,6 +23,10 @@ const {
   where,
 } = require("firebase/firestore");
 const { initializeTestEnvironment } = require("@firebase/rules-unit-testing");
+const {
+  createSessionWithLock,
+  releaseSessionLock,
+} = require("./active-execution-session-test-helper");
 
 const projectId = "demo-calmatea-local";
 const password = "CalmaTEA-Phase10-Local-Only-2026!";
@@ -89,7 +93,7 @@ async function startSession(db, uid, activityId) {
   await runTransaction(db, async (transaction) => {
     const profile = await transaction.get(doc(db, "users", uid));
     const activity = await transaction.get(doc(db, "activities", activityId));
-    transaction.set(sessionReference, {
+    createSessionWithLock(transaction, db, sessionReference, {
       id: sessionReference.id,
       activityId,
       therapyId: activity.data().therapyId,
@@ -123,6 +127,7 @@ async function completeSequence(db, uid, sessionId) {
       metrics: { itemsCount: 3, checksCount: 2 },
       schemaVersion: 1,
     });
+    releaseSessionLock(transaction, db, session.data().childId);
   });
 }
 

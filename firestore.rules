@@ -282,12 +282,15 @@ service cloud.firestore {
                     && request.resource.data.therapyId == resource.data.therapyId
                     && request.resource.data.childId == resource.data.childId
                     && request.resource.data.createdAt == resource.data.createdAt
+                    && request.resource.data.type == resource.data.type
                     && relatedTherapyBelongsToPsychologist()
                     && activityMatchesRelatedTherapy()
                     && hasValidActivityFields();
 
-      allow delete: if isAuthenticatedPsychologist()
-                    && isActivityOwner();
+      // Toda actividad persistida ya está asignada (no hay estado draft).
+      // Retirarla mediante status=cancelled conserva sesiones e historial y
+      // evita una comprobación de sesiones susceptible a carreras.
+      allow delete: if false;
     }
 
     // Ejecuciones infantiles: identidad derivada del perfil child y cierre

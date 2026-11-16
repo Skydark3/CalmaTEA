@@ -1,0 +1,24 @@
+{
+  "productionProject": "calmatea-4c781",
+  "testProject": "demo-calmatea-local",
+  "existingProductionCollectionsUnchanged": [
+    "users/{uid}",
+    "psychologists/{uid}",
+    "children/{childId}",
+    "therapies/{therapyId}"
+  ],
+  "intentionalRestrictions": [
+    "activities.type immutable on every update",
+    "activities physical delete denied for all client identities"
+  ],
+  "phase10RulesOutsideActivitiesUnchanged": true,
+  "schemaChanges": false,
+  "migrations": false,
+  "additionalIndexes": false,
+  "newQueries": false,
+  "candidateSha256": {
+    "firestore.rules": "5eb5bc27e86afb3d5509bd6d5ace1beacb1de0f8bf4106c3b558434a0afb089f",
+    "firestore.indexes.json": "0851e25b02ee6d4084a3f0b2836e298bb96b3d3cd0ac8a877ab135b2a02480d7"
+  },
+  "productionWrites": 0
+}
